@@ -1,0 +1,33 @@
+trigger:
+  - main
+
+resources:
+- repo: self
+
+variables:
+  - group: Dev
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        command: build
+        dockerfile: '**/Dockerfile'
+        repository: $(AWS_ECR_IMAGE_URI)
+    - task: ECRPushImage@1
+      inputs:
+        awsCredentials: 'AWS_ECR_MANAGER'
+        regionName: $(AWS_REGION)
+        imageSource: 'imagename'
+        sourceImageName: $(AWS_ECR_IMAGE_URI)
+        sourceImageTag: $(Build.BuildId)
+        pushTag: $(Build.BuildId)
+        repositoryName: $(ENVIRONMENT)_ml_engine
