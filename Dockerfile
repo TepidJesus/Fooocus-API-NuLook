@@ -15,8 +15,10 @@ RUN pip install --no-cache-dir opencv-python-headless -i https://pypi.org/simple
 RUN mkdir -p /app/repositories/Fooocus/models/checkpoints/
 
 # Download the model file
-RUN curl -L "https://huggingface.co/lllyasviel/fav_models/resolve/main/fav/juggernautXL_v8Rundiffusion.safetensors" \
-    -o /app/repositories/Fooocus/models/checkpoints/juggernautXL_v8Rundiffusion.safetensors
+RUN apt-get update && apt-get install -y curl && \
+    curl -L "https://huggingface.co/lllyasviel/fav_models/resolve/main/fav/juggernautXL_v8Rundiffusion.safetensors" \
+    -o /app/repositories/Fooocus/models/checkpoints/juggernautXL_v8Rundiffusion.safetensors && \
+    apt-get remove -y curl && apt-get autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8888
 
