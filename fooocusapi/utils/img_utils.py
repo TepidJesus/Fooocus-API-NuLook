@@ -77,6 +77,7 @@ def read_input_image(input_image: UploadFile | str | None) -> np.ndarray | None:
     if input_image is None or input_image == '':
         return None
     if isinstance(input_image, str):
+        print(input_image[:100])
         input_image_bytes = base64.b64decode(input_image)
     else:
         input_image_bytes = input_image.file.read()
