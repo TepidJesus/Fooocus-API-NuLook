@@ -49,6 +49,62 @@ index_url = os.environ.get("INDEX_URL", "")
 re_requirement = re.compile(r"\s*([-_a-zA-Z0-9]+)\s*(?:==\s*([-+_.a-zA-Z0-9]+))?\s*")
 
 
+def download_models_from_s3():
+    """
+    Download model and LoRA files from S3 and place them in the correct local directories.
+    """
+    import boto3
+    import os
+
+    s3_bucket_name = os.environ.get('MODEL_BUCKET_NAME')
+    aws_region = os.environ.get('AWS_REGION', 'us-east-2')
+
+    if not s3_bucket_name:
+        logger.std_error("MODEL_BUCKET_NAME environment variable not set.")
+        return
+
+    s3_client = boto3.client('s3', region_name=aws_region)
+
+    # Define the local paths
+    model_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'checkpoints')
+    lora_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'loras')
+    logger.std_info("Created local paths")
+
+    # Ensure the directories exist
+    os.makedirs(model_local_path, exist_ok=True)
+    os.makedirs(lora_local_path, exist_ok=True)
+    logger.std_info("Created model and lora local directories")
+    # Download the model file
+    model_s3_key = 'models/juggernautXL_v8Rundiffusion.safetensors'
+    try:
+        logger.std_info("Downloading model from S3")
+        s3_client.download_file(
+            s3_bucket_name,
+            model_s3_key,
+            os.path.join(model_local_path, 'juggernautXL_v8Rundiffusion.safetensors')
+        )
+        logger.std_info(f"Downloaded model {model_s3_key} from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading model file from S3: {e}")
+
+    # Download all LoRA files from the /loras folder
+    loras_s3_prefix = 'loras/'
+    try:
+        logger.std_info("Downloading loras from S3")
+        paginator = s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=s3_bucket_name, Prefix=loras_s3_prefix):
+            for obj in page.get('Contents', []):
+                key = obj['Key']
+                if key.endswith('/'):
+                    continue  # Skip directories
+                local_file_name = os.path.basename(key)
+                local_file_path = os.path.join(lora_local_path, local_file_name)
+                s3_client.download_file(s3_bucket_name, key, local_file_path)
+                logger.std_info(f"Downloaded LoRA {key} from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading LoRA files from S3: {e}")
+
+
 def install_dependents(skip: bool = False):
     """
     Check and install dependencies
@@ -120,7 +176,8 @@ def prepare_environments(args) -> bool:
         default.get_aspect_ratio_value(a) for a in config.available_aspect_ratios
     ]
 
-    download_models()
+    # Download models from S3
+    download_models_from_s3()
 
     # Init task queue
     from fooocusapi import worker
@@ -334,15 +391,13 @@ def sqs_polling_loop():
                 if image_results and len(image_results) > 0:
                     image_result = image_results[0]
                     image_data_base64 = image_result.base64
-                    print(image_data_base64[:100])
 
                     # Save image to S3
-                    image_data = base64.b64decode(image_data_base64)
-                    result_image_key = f"output_image_{job_id}.{req.save_extension}"
+                    result_image_key = f"output_image_{job_id}"
                     s3_client.put_object(
                         Bucket=s3_result_bucket_name,
                         Key=result_image_key,
-                        Body=image_data
+                        Body=image_data_base64
                     )
                     logger.std_info(f"[SQS Message] Output image saved to S3 with key: {result_image_key}")
 
