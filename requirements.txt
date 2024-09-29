@@ -26,3 +26,4 @@ sqlalchemy
 packaging
 rich
 chardet
+boto3
