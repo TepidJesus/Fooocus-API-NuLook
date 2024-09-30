@@ -255,9 +255,11 @@ def sqs_polling_loop():
     s3_bucket_name = os.environ.get('S3_BUCKET_NAME')
     s3_result_bucket_name = os.environ.get('S3_RESULT_BUCKET_NAME')
     aws_region = os.environ.get('AWS_REGION', 'us-east-1')
+    dynamodb_table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'NuLookJobStatus')
 
     s3_client = boto3.client('s3', region_name=aws_region)
     sqs_client = boto3.client('sqs', region_name=aws_region)
+    dynamodb_client = boto3.client('dynamodb', region_name=aws_region)
 
     logger.std_info("[SQS Polling] Started polling for messages.")
 
@@ -278,6 +280,16 @@ def sqs_polling_loop():
                 body = message['Body']
                 msg = json.loads(body)
                 logger.std_info(f"[SQS Message] Received message: {msg}")
+                dynamodb_client.update_item(
+                    TableName=dynamodb_table_name,
+                    Key={
+                        'job_id': {'S': job_id}
+                    },
+                    UpdateExpression='SET job_status = :status',
+                    ExpressionAttributeValues={
+                        ':status': {'S': 'INPAINT_STARTED'}
+                    }
+                )
 
                 # Extract parameters from the message
                 params = msg.copy()
@@ -400,6 +412,17 @@ def sqs_polling_loop():
                         Body=image_data_base64
                     )
                     logger.std_info(f"[SQS Message] Output image saved to S3 with key: {result_image_key}")
+
+                    dynamodb_client.update_item(
+                        TableName=dynamodb_table_name,
+                        Key={
+                            'job_id': {'S': job_id}
+                        },
+                        UpdateExpression='SET job_status = :status',
+                        ExpressionAttributeValues={
+                            ':status': {'S': 'INPAINT_COMPLETE'}
+                        }
+                    )
 
                     # Send message to outbound SQS queue
                     outbound_message = {
