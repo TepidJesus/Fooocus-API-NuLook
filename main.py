@@ -177,7 +177,7 @@ def prepare_environments(args) -> bool:
     ]
 
     # Download models from S3
-    download_models_from_s3()
+    # download_models_from_s3()
 
     # Init task queue
     from fooocusapi import worker
@@ -279,6 +279,7 @@ def sqs_polling_loop():
                 receipt_handle = message['ReceiptHandle']
                 body = message['Body']
                 msg = json.loads(body)
+                job_id = msg.get('job_id', None)
                 logger.std_info(f"[SQS Message] Received message: {msg}")
                 dynamodb_client.update_item(
                     TableName=dynamodb_table_name,
@@ -445,6 +446,16 @@ def sqs_polling_loop():
 
         except Exception as e:
             logger.std_error(f"[SQS Polling] Exception occurred: {e}")
+            dynamodb_client.update_item(
+                TableName=dynamodb_table_name,
+                Key={
+                    'job_id': {'S': job_id}
+                },
+                UpdateExpression='SET job_status = :status',
+                ExpressionAttributeValues={
+                    ':status': {'S': 'FAILED'}
+                }
+            )
             import traceback
             traceback.print_exc()
 
