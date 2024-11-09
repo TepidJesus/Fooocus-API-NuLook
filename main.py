@@ -16,6 +16,7 @@ import shutil
 import sys
 import json
 from threading import Thread
+import datetime
 
 import boto3  # AWS SDK for Python
 from fooocusapi.utils.logger import logger
@@ -29,7 +30,6 @@ module_path = os.path.join(script_path, "repositories/Fooocus")
 
 sys.path.append(script_path)
 sys.path.append(module_path)
-
 
 logger.std_info("[System ARGV] " + str(sys.argv))
 
@@ -247,15 +247,15 @@ from io import BytesIO
 
 def sqs_polling_loop():
     """
-    Poll messages from the inbound SQS queue and process them.
+    Poll the SQS queue for messages and process them.
     """
-    # AWS configuration
-    inbound_queue_url = os.environ.get('INBOUND_SQS_URL')
-    outbound_queue_url = os.environ.get('OUTBOUND_SQS_URL')
-    s3_bucket_name = os.environ.get('S3_BUCKET_NAME')
-    s3_result_bucket_name = os.environ.get('S3_RESULT_BUCKET_NAME')
-    aws_region = os.environ.get('AWS_REGION', 'us-east-1')
-    dynamodb_table_name = os.environ.get('DYNAMODB_TABLE_NAME', 'NuLookJobStatus')
+    import base64
+    aws_region = os.environ.get('AWS_REGION', 'us-east-2')
+    inbound_queue_url = os.environ.get('ML_ENGINE_QUEUE_URL')
+    outbound_queue_url = os.environ.get('POST_PROCESSING_QUEUE_URL')
+    s3_bucket_name = os.environ.get('PRE_PROCESSED_IMAGE_BUCKET_NAME')
+    s3_result_bucket_name = os.environ.get('INPAINTED_IMAGE_BUCKET_NAME')
+    dynamodb_table_name = os.environ.get('JOB_STATUS_TABLE', 'NuLookJobStatus')
 
     s3_client = boto3.client('s3', region_name=aws_region)
     sqs_client = boto3.client('sqs', region_name=aws_region)
@@ -281,14 +281,20 @@ def sqs_polling_loop():
                 msg = json.loads(body)
                 job_id = msg.get('job_id', None)
                 logger.std_info(f"[SQS Message] Received message: {msg}")
+
+                # Record the time when processing starts
+                start_time = datetime.datetime.utcnow().isoformat()
+
+                # Update DynamoDB to reflect that inpainting has started
                 dynamodb_client.update_item(
                     TableName=dynamodb_table_name,
                     Key={
                         'job_id': {'S': job_id}
                     },
-                    UpdateExpression='SET job_status = :status',
+                    UpdateExpression='SET job_status = :status, updated_at = :updated_at',
                     ExpressionAttributeValues={
-                        ':status': {'S': 'INPAINT_STARTED'}
+                        ':status': {'S': 'INPAINT_STARTED'},
+                        ':updated_at': {'S': start_time}
                     }
                 )
 
@@ -302,7 +308,7 @@ def sqs_polling_loop():
                 if input_image_key:
                     response = s3_client.get_object(Bucket=s3_bucket_name, Key=input_image_key)
                     input_image_data = response['Body'].read()
-                    input_image_base64 = input_image_data
+                    input_image_base64 = base64.b64encode(input_image_data).decode('utf-8')
                 else:
                     logger.std_error("[SQS Message] No input_image_key provided.")
                     continue
@@ -312,7 +318,7 @@ def sqs_polling_loop():
                 if input_mask_key:
                     response = s3_client.get_object(Bucket=s3_bucket_name, Key=input_mask_key)
                     input_mask_data = response['Body'].read()
-                    input_mask_base64 = input_mask_data
+                    input_mask_base64 = base64.b64encode(input_mask_data).decode('utf-8')
 
                 # Set default values for parameters not provided
                 from fooocusapi.models.requests_v2 import ImgInpaintOrOutpaintRequestJson, ImagePrompt
@@ -414,16 +420,39 @@ def sqs_polling_loop():
                     )
                     logger.std_info(f"[SQS Message] Output image saved to S3 with key: {result_image_key}")
 
+                    # Record the time when processing completes
+                    completed_time = datetime.datetime.utcnow().isoformat()
+
+                    # Retrieve 'created_at' from DynamoDB
+                    response = dynamodb_client.get_item(
+                        TableName=dynamodb_table_name,
+                        Key={'job_id': {'S': job_id}},
+                        ProjectionExpression='created_at'
+                    )
+                    created_at = response['Item']['created_at']['S']
+
+                    # Calculate processing time in seconds
+                    processing_time = (
+                        datetime.datetime.fromisoformat(completed_time) -
+                        datetime.datetime.fromisoformat(created_at)
+                    ).total_seconds()
+
+                    # Update DynamoDB with completion details
                     dynamodb_client.update_item(
                         TableName=dynamodb_table_name,
                         Key={
                             'job_id': {'S': job_id}
                         },
-                        UpdateExpression='SET job_status = :status',
+                        UpdateExpression='SET job_status = :status, updated_at = :updated_at, completed_at = :completed_at, processing_time = :processing_time',
                         ExpressionAttributeValues={
-                            ':status': {'S': 'INPAINT_COMPLETE'}
+                            ':status': {'S': 'INPAINT_COMPLETE'},
+                            ':updated_at': {'S': completed_time},
+                            ':completed_at': {'S': completed_time},
+                            ':processing_time': {'N': str(processing_time)}
                         }
                     )
+
+                    logger.std_info(f"[SQS Message] Updated DynamoDB for job_id: {job_id}")
 
                     # Send message to outbound SQS queue
                     outbound_message = {
@@ -446,18 +475,24 @@ def sqs_polling_loop():
 
         except Exception as e:
             logger.std_error(f"[SQS Polling] Exception occurred: {e}")
+            import traceback
+            traceback.print_exc()
+
+            current_time = datetime.datetime.utcnow().isoformat()
+
+            # Update DynamoDB with failure status
             dynamodb_client.update_item(
                 TableName=dynamodb_table_name,
                 Key={
                     'job_id': {'S': job_id}
                 },
-                UpdateExpression='SET job_status = :status',
+                UpdateExpression='SET job_status = :status, updated_at = :updated_at, completed_at = :completed_at',
                 ExpressionAttributeValues={
-                    ':status': {'S': 'FAILED'}
+                    ':status': {'S': 'FAILED'},
+                    ':updated_at': {'S': current_time},
+                    ':completed_at': {'S': current_time}
                 }
             )
-            import traceback
-            traceback.print_exc()
 
 def sqs_start_polling_thread():
     """
