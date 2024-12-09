@@ -19,6 +19,7 @@ from threading import Thread
 import datetime
 
 import boto3  # AWS SDK for Python
+from fooocusapi.models.common.base import Lora
 from fooocusapi.utils.logger import logger
 from fooocusapi.utils.tools import run_pip, check_torch_cuda, requirements_check
 from fooocusapi.base_args import add_base_args
@@ -56,7 +57,7 @@ def download_models_from_s3():
     import boto3
     import os
 
-    s3_bucket_name = os.environ.get('MODEL_BUCKET_NAME')
+    s3_bucket_name = os.environ.get('MODEL_BUCKET_NAME', 'nulook-prod-models')
     aws_region = os.environ.get('AWS_REGION', 'us-east-2')
 
     if not s3_bucket_name:
@@ -251,10 +252,10 @@ def sqs_polling_loop():
     """
     import base64
     aws_region = os.environ.get('AWS_REGION', 'us-east-2')
-    inbound_queue_url = os.environ.get('ML_ENGINE_QUEUE_URL')
-    outbound_queue_url = os.environ.get('POST_PROCESSING_QUEUE_URL')
-    s3_bucket_name = os.environ.get('PRE_PROCESSED_IMAGE_BUCKET_NAME')
-    s3_result_bucket_name = os.environ.get('INPAINTED_IMAGE_BUCKET_NAME')
+    inbound_queue_url = os.environ.get('ML_ENGINE_QUEUE_URL', 'https://sqs.us-east-2.amazonaws.com/058264145885/NuLookDevImageMLEngineThomas')
+    outbound_queue_url = os.environ.get('POST_PROCESSING_QUEUE_URL', 'https://sqs.us-east-2.amazonaws.com/058264145885/NuLookDevImagePostProcessingThomas')
+    s3_bucket_name = os.environ.get('PRE_PROCESSED_IMAGE_BUCKET_NAME', 'nulook-dev-preprocessed-images')
+    s3_result_bucket_name = os.environ.get('INPAINTED_IMAGE_BUCKET_NAME', 'nulook-dev-inpainted-images')
     dynamodb_table_name = os.environ.get('JOB_STATUS_TABLE', 'NuLookJobStatus')
 
     s3_client = boto3.client('s3', region_name=aws_region)
@@ -308,17 +309,18 @@ def sqs_polling_loop():
                 if input_image_key:
                     response = s3_client.get_object(Bucket=s3_bucket_name, Key=input_image_key)
                     input_image_data = response['Body'].read()
-                    input_image_base64 = base64.b64encode(input_image_data).decode('utf-8')
+                    # Since the image is stored as a base64-encoded string, decode it to get the string
+                    input_image_base64 = input_image_data.decode('utf-8')
                 else:
                     logger.std_error("[SQS Message] No input_image_key provided.")
                     continue
 
-                # Download and base64-encode input mask from S3 (if provided)
+                # Download input mask from S3 (if provided)
                 input_mask_base64 = None
                 if input_mask_key:
                     response = s3_client.get_object(Bucket=s3_bucket_name, Key=input_mask_key)
                     input_mask_data = response['Body'].read()
-                    input_mask_base64 = base64.b64encode(input_mask_data).decode('utf-8')
+                    input_mask_base64 = input_mask_data.decode('utf-8')
 
                 # Set default values for parameters not provided
                 from fooocusapi.models.requests_v2 import ImgInpaintOrOutpaintRequestJson, ImagePrompt
@@ -353,6 +355,25 @@ def sqs_polling_loop():
                 while len(image_prompts_files) <= 4:
                     image_prompts_files.append(ImagePrompt(cn_img=None))
 
+                hairstyle_lora = None
+                selected_hairstyle = params.get('hair_style').lower()   
+                if selected_hairstyle == 'quiff':
+                    hairstyle_lora = ['quiff.safetensors']
+                elif selected_hairstyle == 'pompadour':
+                    hairstyle_lora = ['pompadour.safetensors']
+                elif selected_hairstyle == 'crew cut':
+                    hairstyle_lora = ['crew_cut.safetensors']
+                elif selected_hairstyle == 'pixie cut':
+                    hairstyle_lora = ['pixie.safetensors']
+                elif selected_hairstyle == 'long waves':
+                    hairstyle_lora = ['long_waves.safetensors']
+                elif selected_hairstyle == 'bob':
+                    hairstyle_lora = ['bob.safetensors']
+                elif selected_hairstyle == 'combover':
+                    hairstyle_lora = ['combover.safetensors']
+                else:
+                    hairstyle_lora = []
+                
                 # Prepare the request object
                 req = ImgInpaintOrOutpaintRequestJson(
                     prompt=params.get('prompt', ''),
@@ -364,10 +385,10 @@ def sqs_polling_loop():
                     image_seed=params.get('image_seed', -1),
                     sharpness=params.get('sharpness', 1.0),
                     guidance_scale=params.get('guidance_scale', 7.5),
-                    base_model_name=params.get('base_model_name', 'sd_xl_base_1.0'),
+                    base_model_name='juggernautXL_v8Rundiffusion.safetensors',
                     refiner_model_name=params.get('refiner_model_name', 'None'),
                     refiner_switch=params.get('refiner_switch', 0.8),
-                    loras=params.get('loras', []),
+                    loras=[Lora(enabled=True, model_name=lora) for lora in hairstyle_lora],
                     advanced_params=advanced_params_obj,
                     save_meta=params.get('save_meta', False),
                     meta_scheme=params.get('meta_scheme', 'fooocus'),
