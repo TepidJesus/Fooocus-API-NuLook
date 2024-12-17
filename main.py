@@ -328,8 +328,11 @@ def sqs_polling_loop():
                 from fooocusapi.routes.generate_v2 import call_worker
 
                 # Create default advanced parameters
-                advanced_params = params.get('advanced_params', {})
-                advanced_params_obj = AdvancedParams(**advanced_params)
+                advanced_params_obj = AdvancedParams(inpaint_erode_or_dilate=params.get('inpaint_erode_or_dilate', 15), 
+                                                     inpaint_respective_field=params.get('inpaint_respective_field', 0.75), 
+                                                     inpaint_strength=params.get('inpaint_strength', 1.0),
+                                                     inpaint_disable_initial_latent=params.get('inpaint_disable_initial_latent', False),
+                )
 
                 # Create default image prompts
                 image_prompts = params.get('image_prompts', [])
@@ -371,6 +374,8 @@ def sqs_polling_loop():
                     hairstyle_lora = ['bob.safetensors']
                 elif selected_hairstyle == 'combover':
                     hairstyle_lora = ['combover.safetensors']
+                elif selected_hairstyle == 'braided':
+                    hairstyle_lora = ['braided.safetensors']
                 else:
                     hairstyle_lora = []
                 
@@ -384,7 +389,7 @@ def sqs_polling_loop():
                     image_number=params.get('image_number', 1),
                     image_seed=params.get('image_seed', -1),
                     sharpness=params.get('sharpness', 1.0),
-                    guidance_scale=params.get('guidance_scale', 7.5),
+                    guidance_scale=params.get('guidance_scale', 7.0),
                     base_model_name='juggernautXL_v8Rundiffusion.safetensors',
                     refiner_model_name=params.get('refiner_model_name', 'None'),
                     refiner_switch=params.get('refiner_switch', 0.8),
@@ -400,9 +405,9 @@ def sqs_polling_loop():
                     uov_input_image=None,
                     uov_method=params.get('uov_method', 'disabled'),
                     upscale_value=params.get('upscale_value', 1.0),
-                    image_prompts=image_prompts_files,
+                    image_prompts=[],
                     inpaint_input_image=None,
-                    inpaint_additional_prompt=params.get('inpaint_additional_prompt', ''),
+                    inpaint_additional_prompt=params.get('prompt', ''), ## Note this was changed to be enabled.
                     input_image=input_image_base64,
                     input_mask=input_mask_base64,
                     outpaint_selections=params.get('outpaint_selections', []),
@@ -442,7 +447,7 @@ def sqs_polling_loop():
                     logger.std_info(f"[SQS Message] Output image saved to S3 with key: {result_image_key}")
 
                     # Record the time when processing completes
-                    completed_time = datetime.datetime.utcnow().isoformat()
+                    completed_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
                     # Retrieve 'created_at' from DynamoDB
                     response = dynamodb_client.get_item(
