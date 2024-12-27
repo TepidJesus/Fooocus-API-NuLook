@@ -178,7 +178,7 @@ def prepare_environments(args) -> bool:
     ]
 
     # Download models from S3
-    # download_models_from_s3()
+    download_models_from_s3()
 
     # Init task queue
     from fooocusapi import worker
