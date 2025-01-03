@@ -160,7 +160,6 @@ def prepare_environments(args) -> bool:
 
     from modules import config
     from fooocusapi.configs import default
-    from fooocusapi.utils.model_loader import download_models
 
     default.default_inpaint_engine_version = config.default_inpaint_engine_version
     default.default_styles = config.default_styles
@@ -531,6 +530,7 @@ def sqs_start_polling_thread():
 if __name__ == "__main__":
     logger.std_info(f"[Fooocus API] Python {sys.version}")
     logger.std_info(f"[Fooocus API] Fooocus API version: {version}")
+    logger.std_info(f"[Fooocus API] Modified SQS Version 1.0.0")
 
     parser = argparse.ArgumentParser()
     add_base_args(parser, True)
