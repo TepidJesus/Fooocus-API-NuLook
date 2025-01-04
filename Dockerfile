@@ -10,6 +10,7 @@ COPY . /app
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir opencv-python-headless -i https://pypi.org/simple
+RUN pip install --no-cache-dir torch torchvision --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Create the directory structure for the model
 RUN mkdir -p /app/repositories/Fooocus/models/checkpoints/
