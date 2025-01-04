@@ -54,9 +54,6 @@ def download_models_from_s3():
     """
     Download model and LoRA files from S3 and place them in the correct local directories.
     """
-    import boto3
-    import os
-
     s3_bucket_name = os.environ.get('MODEL_BUCKET_NAME', 'nulook-prod-models')
     aws_region = os.environ.get('AWS_REGION', 'us-east-2')
 
@@ -69,12 +66,25 @@ def download_models_from_s3():
     # Define the local paths
     model_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'checkpoints')
     lora_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'loras')
-    logger.std_info("Created local paths")
-
-    # Ensure the directories exist
+    prompt_expansion_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'prompt_expansion', 'fooocus_expansion')
+    
+    # Ensure all directories exist
     os.makedirs(model_local_path, exist_ok=True)
     os.makedirs(lora_local_path, exist_ok=True)
-    logger.std_info("Created model and lora local directories")
+    os.makedirs(prompt_expansion_path, exist_ok=True)
+    
+    # Download prompt expansion model
+    prompt_expansion_s3_key = 'models/prompt_expansion/pytorch_model.bin'  # Adjust this path as needed
+    try:
+        logger.std_info("Downloading prompt expansion model from S3")
+        s3_client.download_file(
+            s3_bucket_name,
+            prompt_expansion_s3_key,
+            os.path.join(prompt_expansion_path, 'pytorch_model.bin')
+        )
+        logger.std_info(f"Downloaded prompt expansion model from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading prompt expansion model: {e}")
     # Download the model file
     model_s3_key = 'models/juggernautXL_v8Rundiffusion.safetensors'
     try:
