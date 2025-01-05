@@ -74,7 +74,7 @@ def download_models_from_s3():
     os.makedirs(prompt_expansion_path, exist_ok=True)
     
     # Download prompt expansion model
-    prompt_expansion_s3_key = 'models/prompt_expansion/pytorch_model.bin'  # Adjust this path as needed
+    prompt_expansion_s3_key = '/prompt_expansion/pytorch_model.bin'  # Adjust this path as needed
     try:
         logger.std_info("Downloading prompt expansion model from S3")
         s3_client.download_file(
