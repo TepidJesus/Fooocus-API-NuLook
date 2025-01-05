@@ -85,6 +85,43 @@ def download_models_from_s3():
         logger.std_info(f"Downloaded prompt expansion model from S3 bucket {s3_bucket_name}")
     except Exception as e:
         logger.std_error(f"Error downloading prompt expansion model: {e}")
+
+    flax_s3_key = '/prompt_expansion/flax_model.msgpack'  # Adjust this path as needed
+    try:
+        logger.std_info("Downloading flax model from S3")
+        s3_client.download_file(
+            s3_bucket_name,
+            flax_s3_key,
+            os.path.join(prompt_expansion_path, 'flax_model.msgpack')
+        )
+        logger.std_info(f"Downloaded flax model from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading flax model: {e}")
+
+    ckpt_s3_key = '/prompt_expansion/model.ckpt.index'  # Adjust this path as needed
+    try:
+        logger.std_info("Downloading model.ckpt.index model from S3")
+        s3_client.download_file(
+            s3_bucket_name,
+            ckpt_s3_key,
+            os.path.join(prompt_expansion_path, 'model.ckpt.index')
+        )
+        logger.std_info(f"Downloaded model.ckpt.index model from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading model.ckpt.index model: {e}")
+
+        tf_model_s3_key = '/prompt_expansion/tf_model.h5'  # Adjust this path as needed
+    try:
+        logger.std_info("Downloading tf_model from S3")
+        s3_client.download_file(
+            s3_bucket_name,
+            tf_model_s3_key,
+            os.path.join(prompt_expansion_path, 'tf_model.h5')
+        )
+        logger.std_info(f"Downloaded tf_model from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading tf_model.h5: {e}")
+        
     # Download the model file
     model_s3_key = 'models/juggernautXL_v8Rundiffusion.safetensors'
     try:
