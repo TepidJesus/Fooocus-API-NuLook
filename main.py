@@ -67,7 +67,7 @@ def download_models_from_s3():
     model_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'checkpoints')
     lora_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'loras')
     prompt_expansion_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'prompt_expansion', 'fooocus_expansion')
-    vae_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'vaeapprox')
+    vae_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'vae_approx')
     # Ensure all directories exist
     os.makedirs(model_local_path, exist_ok=True)
     os.makedirs(lora_local_path, exist_ok=True)
