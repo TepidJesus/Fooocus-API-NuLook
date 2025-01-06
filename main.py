@@ -67,11 +67,12 @@ def download_models_from_s3():
     model_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'checkpoints')
     lora_local_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'loras')
     prompt_expansion_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'prompt_expansion', 'fooocus_expansion')
-    
+    vae_path = os.path.join(script_path, 'repositories', 'Fooocus', 'models', 'vaeapprox')
     # Ensure all directories exist
     os.makedirs(model_local_path, exist_ok=True)
     os.makedirs(lora_local_path, exist_ok=True)
     os.makedirs(prompt_expansion_path, exist_ok=True)
+    os.makedirs(vae_path, exist_ok=True)
     
     # Download prompt expansion model
     prompt_expansion_s3_key = 'prompt_expansion/pytorch_model.bin'  # Adjust this path as needed
@@ -121,6 +122,18 @@ def download_models_from_s3():
         logger.std_info(f"Downloaded tf_model from S3 bucket {s3_bucket_name}")
     except Exception as e:
         logger.std_error(f"Error downloading tf_model.h5: {e}")
+
+        vae_s3_key = 'misc/xlvaeapp.pth'  # Adjust this path as needed
+    try:
+        logger.std_info("Downloading xlvaeapp from S3")
+        s3_client.download_file(
+            s3_bucket_name,
+            vae_s3_key,
+            os.path.join(vae_path, 'xlvaeapp.pth')
+        )
+        logger.std_info(f"Downloaded xlvaeapp from S3 bucket {s3_bucket_name}")
+    except Exception as e:
+        logger.std_error(f"Error downloading xlvaeapp: {e}")
         
     # Download the model file
     model_s3_key = 'models/juggernautXL_v8Rundiffusion.safetensors'
